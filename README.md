@@ -29,7 +29,7 @@ git clone https://github.com/kjx-talesofai/cohub-silo-client.git
 cd cohub-silo-client
 
 # Configure target silo (add multiple with different aliases)
-silo-client config --space 98d87d78-047f-4298-9b7e-ea12ef39f0ae --alias kjx
+silo-client config --space <your-space-uuid> --alias kjx
 silo-client config --space <another-uuid> --alias colleague
 
 # Explore
@@ -89,7 +89,7 @@ Supports multiple silos with aliases. Config is stored in `~/.silo-client.json`:
 ```json
 {
   "spaces": {
-    "kjx": "98d87d78-047f-4298-9b7e-ea12ef39f0ae",
+    "kjx": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "alice": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   },
   "default": "kjx"
@@ -121,7 +121,7 @@ export SILO_SPACE=kjx
 silo-client collections
 
 # Raw UUID always works too
-silo-client --space 98d87d78-... collections
+silo-client --space xxxxxxxx-... collections
 ```
 
 ## For silo owners

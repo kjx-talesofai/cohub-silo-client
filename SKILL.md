@@ -21,7 +21,7 @@ npx skills add github.com/kjx-talesofai/cohub-silo-client -g -y
 
 # 2. Configure the target silo's space UUID (ask the silo owner)
 silo-client config --space <space-uuid> --alias <name>
-# e.g. silo-client config --space 98d87d78-... --alias kjx
+# e.g. silo-client config --space <uuid> --alias kjx
 
 # Add more silos with different aliases
 silo-client config --space <another-uuid> --alias colleague
