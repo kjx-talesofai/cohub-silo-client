@@ -119,4 +119,4 @@ That's it. Your colleagues install the skill and point it at your space.
 
 ## License
 
-UNLICENSED
+MIT © 2026 koujiaxin / Hyper Sampling
