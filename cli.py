@@ -28,6 +28,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -369,6 +370,7 @@ def main():
         prog="silo-client",
         description="Query a remote cohub-silo data server (multi-space support)",
     )
+    parser.add_argument("--space", help="Space alias or UUID (overrides default)")
 
     sub = parser.add_subparsers(dest="command")
 
@@ -380,24 +382,19 @@ def main():
     p_cfg.add_argument("--remove", help="Remove a space by alias")
 
     # spaces (alias for config display)
-    p_sp = sub.add_parser("spaces", help="List configured spaces (alias: config)")
-    p_sp.add_argument("--space", help=argparse.SUPPRESS)  # hidden, for consistency
+    sub.add_parser("spaces", help="List configured spaces (alias: config)")
 
     # collections
-    p_cl = sub.add_parser("collections", help="List collections")
-    p_cl.add_argument("--space", help="Space alias or UUID")
+    sub.add_parser("collections", help="List collections")
 
     # topics
-    p_tp = sub.add_parser("topics", help="List topics with counts")
-    p_tp.add_argument("--space", help="Space alias or UUID")
+    sub.add_parser("topics", help="List topics with counts")
 
     # stats
-    p_st = sub.add_parser("stats", help="Daily stats summary")
-    p_st.add_argument("--space", help="Space alias or UUID")
+    sub.add_parser("stats", help="Daily stats summary")
 
     # search
     p_sr = sub.add_parser("search", help="Full-text search")
-    p_sr.add_argument("--space", help="Space alias or UUID")
     p_sr.add_argument("--q", help="Search query (FTS5 full-text)")
     p_sr.add_argument("--collection", help="Filter by collection ID")
     p_sr.add_argument("--topic", help="Filter by topic")
@@ -406,14 +403,12 @@ def main():
 
     # sample
     p_sm = sub.add_parser("sample", help="Random sample of items")
-    p_sm.add_argument("--space", help="Space alias or UUID")
     p_sm.add_argument("--topic", help="Filter by topic")
     p_sm.add_argument("--collection", help="Filter by collection ID")
     p_sm.add_argument("--limit", type=int, default=5)
 
     # get
     p_gt = sub.add_parser("get", help="Get single item by ID")
-    p_gt.add_argument("--space", help="Space alias or UUID")
     p_gt.add_argument("id", type=int)
     p_gt.add_argument("--content", action="store_true", help="Include full content")
 
@@ -423,6 +418,7 @@ def main():
         parser.print_help()
         return
 
+    t0 = time.time()
     cmds = {
         "config": cmd_config,
         "spaces": cmd_spaces,
@@ -434,6 +430,9 @@ def main():
         "get": cmd_get,
     }
     cmds[args.command](args)
+    elapsed = int((time.time() - t0) * 1000)
+    if args.command not in ("config", "spaces"):
+        print(f"\n⏱  {elapsed}ms", file=sys.stderr)
 
 
 if __name__ == "__main__":
