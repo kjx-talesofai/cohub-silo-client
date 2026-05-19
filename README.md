@@ -12,11 +12,13 @@ npx skills add github.com/kjx-talesofai/cohub-silo-client -g -y
 git clone https://github.com/kjx-talesofai/cohub-silo-client.git
 cd cohub-silo-client
 
-# Configure target silo
-silo-client config --space 98d87d78-047f-4298-9b7e-ea12ef39f0ae
+# Configure target silo (add multiple with different aliases)
+silo-client config --space 98d87d78-047f-4298-9b7e-ea12ef39f0ae --alias kjx
+silo-client config --space <another-uuid> --alias colleague
 
 # Explore
-silo-client collections
+silo-client collections                   # uses default
+silo-client collections --space colleague # explicit space
 silo-client topics
 silo-client stats
 
@@ -55,7 +57,8 @@ The silo is **public by design** — no API keys, no auth. Anyone who knows the 
 
 | Command | Description |
 |---|---|
-| `config` | Show/set target silo space UUID |
+| `config` | Show/add/remove/rename spaces (multi-space support) |
+| `spaces` | Alias for `config` — list configured spaces |
 | `collections` | List collections with item counts |
 | `topics` | List topics with item counts |
 | `stats` | Daily indexing statistics |
@@ -63,24 +66,46 @@ The silo is **public by design** — no API keys, no auth. Anyone who knows the 
 | `sample` | Random sample of items |
 | `get <id>` | Single item metadata (+ `--content` for full text) |
 
-## Config
+## Multi-space config
 
-Space UUID is resolved in order:
+Supports multiple silos with aliases. Config is stored in `~/.silo-client.json`:
 
-1. `--space` CLI flag
-2. `SILO_SPACE` environment variable
-3. `~/.silo-client.json` config file
+```json
+{
+  "spaces": {
+    "kjx": "98d87d78-047f-4298-9b7e-ea12ef39f0ae",
+    "alice": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  },
+  "default": "kjx"
+}
+```
+
+Space resolution order:
+
+1. `--space <alias|uuid>` CLI flag (per-command)
+2. `SILO_SPACE` environment variable (alias or UUID)
+3. `default` alias in `~/.silo-client.json`
 
 ```bash
-# Persistent config
-silo-client config --space <uuid>
+# Add spaces
+silo-client config --space <uuid> --alias kjx
+silo-client config --space <uuid> --alias alice
 
-# One-shot
-silo-client --space <uuid> search --q "keyword"
+# Set default
+silo-client config --default alice
+
+# Remove
+silo-client config --remove alice
+
+# One-shot override
+silo-client --space kjx search --q "keyword"
 
 # Env var
-export SILO_SPACE=<uuid>
+export SILO_SPACE=kjx
 silo-client collections
+
+# Raw UUID always works too
+silo-client --space 98d87d78-... collections
 ```
 
 ## For silo owners

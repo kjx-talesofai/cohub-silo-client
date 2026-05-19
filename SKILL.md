@@ -20,22 +20,36 @@ cohub-silo is a data server running inside a Cohub Space. It indexes documents, 
 npx skills add github.com/kjx-talesofai/cohub-silo-client -g -y
 
 # 2. Configure the target silo's space UUID (ask the silo owner)
-silo-client config --space <space-uuid>
-# OR set env:
-export SILO_SPACE=<space-uuid>
+silo-client config --space <space-uuid> --alias <name>
+# e.g. silo-client config --space 98d87d78-... --alias kjx
+
+# Add more silos with different aliases
+silo-client config --space <another-uuid> --alias colleague
+
+# Set default
+silo-client config --default kjx
+
+# Or use env var (accepts alias or raw UUID)
+export SILO_SPACE=kjx
 ```
+
+**Supports multiple spaces.** Add as many silos as you want with different aliases, and switch between them with `--space <alias>`.
 
 The silo URL is always: `https://s-{space-uuid}-5173.cohub.run`
 
 ## CLI reference
 
 ```bash
-# Config
-silo-client config                         # Show current config
-silo-client config --space <uuid>          # Set target space
+# Config (multi-space)
+silo-client config                         # Show all configured spaces
+silo-client spaces                         # Same as config
+silo-client config --space <uuid> --alias <name>   # Add a space
+silo-client config --default <alias>               # Set default
+silo-client config --remove <alias>                # Remove a space
 
-# Discovery
-silo-client collections                    # List all collections (names, IDs, topics, item counts)
+# Discovery (--space <alias|uuid> overrides default)
+silo-client collections                    # Use default space
+silo-client collections --space kjx        # Explicit space by alias
 silo-client topics                         # List all topics with item counts
 silo-client stats                          # Daily indexing stats
 
@@ -62,7 +76,8 @@ When a user asks you to use silo-client:
    ```bash
    silo-client config
    ```
-   If space is not configured, ask the user for the space UUID.
+   If no spaces are configured, ask the user for the space UUID.
+   Users may have multiple silos configured — respect the alias they want to use.
 
 2. **Discover what's available:**
    ```bash

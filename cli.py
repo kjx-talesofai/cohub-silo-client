@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
-"""silo-client — CLI for querying a remote cohub-silo instance.
+"""silo-client — CLI for querying remote cohub-silo instances.
 
 Uses the public REST API at https://s-{space}-5173.cohub.run.
 No authentication required — silo is public by design.
+Supports multiple spaces via aliases.
 
 Usage:
-  silo-client config --space <uuid>          # Set target silo space UUID
-  silo-client collections                     # List all collections
-  silo-client search --q "keyword" [...]      # Full-text search
-  silo-client sample [...]                    # Random sample
-  silo-client get <id> [--content]            # Get single item
-  silo-client topics                          # List topics with counts
-  silo-client stats                           # Daily stats summary
+  silo-client config --space <uuid> [--alias <name>]  # Add or update a space
+  silo-client config --default <alias>                # Set default space
+  silo-client config --remove <alias>                 # Remove a space
+  silo-client config                                  # Show all configured spaces
+  silo-client spaces                                  # Alias: list configured spaces
+  silo-client collections [--space <alias|uuid>]      # List collections
+  silo-client search --q "..." [--space ...] [...]    # Full-text search
+  silo-client sample [--space ...] [...]              # Random sample
+  silo-client get <id> [--space ...] [--content]      # Get single item
+  silo-client topics [--space ...]                    # List topics with counts
+  silo-client stats [--space ...]                     # Daily stats
 
-Config:
-  Space UUID is resolved in order:
-    1. --space CLI flag
-    2. SILO_SPACE environment variable
-    3. Saved config in ~/.silo-client.json
+Space resolution (--space flag):
+  Accepts either an alias (e.g. "kjx") or a raw UUID.
+  If not given, resolves from SILO_SPACE env → config default.
 """
 
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -30,12 +34,26 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".silo-client.json"
 BASE_PORT = 5173
+UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
+
+
+# ─── Config helpers ──────────────────────────────────────────
 
 
 def load_config():
+    """Load config, auto-migrating old single-space format."""
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
-            return json.load(f)
+            cfg = json.load(f)
+        # Migrate old format: {"space": "uuid"} → {"spaces": {...}, "default": "..."}
+        if "space" in cfg and "spaces" not in cfg:
+            old = cfg.pop("space")
+            cfg["spaces"] = {"default": old}
+            cfg["default"] = "default"
+            save_config(cfg)
+        return cfg
     return {}
 
 
@@ -45,19 +63,76 @@ def save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
-def resolve_space(args):
-    """Resolve space UUID from args / env / config."""
+def get_spaces():
+    """Return {alias: uuid} dict from config."""
+    cfg = load_config()
+    return cfg.get("spaces", {})
+
+
+def get_default_alias():
+    cfg = load_config()
+    return cfg.get("default", None)
+
+
+def resolve_space(space_arg):
+    """Resolve a space argument (alias or raw UUID) to a UUID.
+
+    Resolution order:
+      1. If it's a raw UUID, return as-is
+      2. If it matches a configured alias, return the saved UUID
+      3. Otherwise, return None
+    """
+    if not space_arg:
+        return None
+    if UUID_RE.match(space_arg):
+        return space_arg  # raw UUID
+    spaces = get_spaces()
+    return spaces.get(space_arg, None)
+
+
+def require_space(args):
+    """Resolve the space to use for this command.
+
+    Order: --space flag → SILO_SPACE env → config default alias.
+    """
+    # 1. --space flag
     if getattr(args, "space", None):
-        return args.space
+        uuid = resolve_space(args.space)
+        if not uuid:
+            spaces = get_spaces()
+            known = ", ".join(spaces.keys()) if spaces else "none"
+            print(f"✗ unknown space: '{args.space}'", file=sys.stderr)
+            print(f"  known aliases: {known}", file=sys.stderr)
+            print(f"  raw UUIDs are also accepted", file=sys.stderr)
+            sys.exit(1)
+        return uuid
+
+    # 2. SILO_SPACE env
     env = os.environ.get("SILO_SPACE", "").strip()
     if env:
-        return env
-    cfg = load_config()
-    return cfg.get("space", None)
+        uuid = resolve_space(env)
+        if not uuid:
+            print(f"✗ SILO_SPACE='{env}' is neither a known alias nor a valid UUID", file=sys.stderr)
+            sys.exit(1)
+        return uuid
+
+    # 3. config default
+    default_alias = get_default_alias()
+    if default_alias:
+        spaces = get_spaces()
+        uuid = spaces.get(default_alias)
+        if uuid:
+            return uuid
+
+    # Nothing configured
+    print("✗ no silo space configured.", file=sys.stderr)
+    print("  set with: silo-client config --space <uuid> --alias <name>", file=sys.stderr)
+    print("  or:       export SILO_SPACE=<alias|uuid>", file=sys.stderr)
+    sys.exit(1)
 
 
-def api_url(space, path):
-    return f"https://s-{space}-{BASE_PORT}.cohub.run{path}"
+def api_url(space_uuid, path):
+    return f"https://s-{space_uuid}-{BASE_PORT}.cohub.run{path}"
 
 
 def fetch_json(url):
@@ -80,32 +155,83 @@ def fetch_json(url):
         sys.exit(1)
 
 
-def require_space(args):
-    space = resolve_space(args)
-    if not space:
-        print("✗ no silo space configured.", file=sys.stderr)
-        print("  set with: silo-client config --space <uuid>", file=sys.stderr)
-        print("  or:       export SILO_SPACE=<uuid>", file=sys.stderr)
-        sys.exit(1)
-    return space
-
-
 # ─── Commands ────────────────────────────────────────────────
 
 
 def cmd_config(args):
-    """Save or show config."""
-    if args.space:
-        cfg = load_config()
-        cfg["space"] = args.space
+    """Manage spaces config."""
+    cfg = load_config()
+    spaces = cfg.get("spaces", {})
+
+    if args.remove:
+        alias = args.remove
+        if alias not in spaces:
+            print(f"✗ alias '{alias}' not found in config", file=sys.stderr)
+            sys.exit(1)
+        del spaces[alias]
+        if cfg.get("default") == alias:
+            cfg["default"] = next(iter(spaces), None)
         save_config(cfg)
-        print(f"✓ silo space set to {args.space}")
-    else:
-        cfg = load_config()
-        env = os.environ.get("SILO_SPACE", "")
-        print(f"config file:  {CONFIG_PATH}")
-        print(f"space:        {cfg.get('space', '(not set)')}")
-        print(f"SILO_SPACE:   {env or '(not set)'}")
+        print(f"✓ removed '{alias}'")
+        return
+
+    if args.default:
+        alias = args.default
+        if alias not in spaces:
+            print(f"✗ alias '{alias}' not found. Add it first:", file=sys.stderr)
+            print(f"  silo-client config --space <uuid> --alias {alias}", file=sys.stderr)
+            sys.exit(1)
+        cfg["default"] = alias
+        save_config(cfg)
+        print(f"✓ default space set to '{alias}' ({spaces[alias]})")
+        return
+
+    if args.space:
+        alias = args.alias or "default"
+        if UUID_RE.match(args.space):
+            uuid = args.space
+        else:
+            uuid = resolve_space(args.space)
+            if not uuid:
+                print(f"✗ '{args.space}' is not a valid UUID or known alias", file=sys.stderr)
+                sys.exit(1)
+        spaces[alias] = uuid
+        if not cfg.get("default"):
+            cfg["default"] = alias
+        cfg["spaces"] = spaces
+        save_config(cfg)
+        print(f"✓ '{alias}' → {uuid}")
+        if cfg["default"] == alias:
+            print(f"  (default)")
+        return
+
+    # Show config
+    print(f"config:  {CONFIG_PATH}")
+    default = cfg.get("default")
+    if not spaces:
+        print("  (no spaces configured)")
+        return
+    for alias, uuid in sorted(spaces.items()):
+        marker = " *" if alias == default else ""
+        print(f"  {alias:20s} → {uuid}{marker}")
+    print()
+    print(f"env:     SILO_SPACE={os.environ.get('SILO_SPACE', '(not set)')}")
+
+
+def cmd_spaces(args):
+    """List configured spaces (display only)."""
+    cfg = load_config()
+    spaces = cfg.get("spaces", {})
+    default = cfg.get("default")
+    print(f"config:  {CONFIG_PATH}")
+    if not spaces:
+        print("  (no spaces configured)")
+        return
+    for alias, uuid in sorted(spaces.items()):
+        marker = " *" if alias == default else ""
+        print(f"  {alias:20s} → {uuid}{marker}")
+    print()
+    print(f"env:     SILO_SPACE={os.environ.get('SILO_SPACE', '(not set)')}")
 
 
 def cmd_collections(args):
@@ -241,27 +367,37 @@ def cmd_get(args):
 def main():
     parser = argparse.ArgumentParser(
         prog="silo-client",
-        description="Query a remote cohub-silo data server",
+        description="Query a remote cohub-silo data server (multi-space support)",
     )
-    parser.add_argument("--space", help="Silo space UUID (overrides env/config)")
 
     sub = parser.add_subparsers(dest="command")
 
     # config
-    p_cfg = sub.add_parser("config", help="Set or show silo space config")
-    p_cfg.add_argument("--space", help="Space UUID to save")
+    p_cfg = sub.add_parser("config", help="Manage silo spaces config")
+    p_cfg.add_argument("--space", help="Space UUID or alias to add/update")
+    p_cfg.add_argument("--alias", help="Alias name for this space (default: 'default')")
+    p_cfg.add_argument("--default", help="Set default space alias")
+    p_cfg.add_argument("--remove", help="Remove a space by alias")
+
+    # spaces (alias for config display)
+    p_sp = sub.add_parser("spaces", help="List configured spaces (alias: config)")
+    p_sp.add_argument("--space", help=argparse.SUPPRESS)  # hidden, for consistency
 
     # collections
-    sub.add_parser("collections", help="List collections")
+    p_cl = sub.add_parser("collections", help="List collections")
+    p_cl.add_argument("--space", help="Space alias or UUID")
 
     # topics
-    sub.add_parser("topics", help="List topics with counts")
+    p_tp = sub.add_parser("topics", help="List topics with counts")
+    p_tp.add_argument("--space", help="Space alias or UUID")
 
     # stats
-    sub.add_parser("stats", help="Daily stats summary")
+    p_st = sub.add_parser("stats", help="Daily stats summary")
+    p_st.add_argument("--space", help="Space alias or UUID")
 
     # search
     p_sr = sub.add_parser("search", help="Full-text search")
+    p_sr.add_argument("--space", help="Space alias or UUID")
     p_sr.add_argument("--q", help="Search query (FTS5 full-text)")
     p_sr.add_argument("--collection", help="Filter by collection ID")
     p_sr.add_argument("--topic", help="Filter by topic")
@@ -270,12 +406,14 @@ def main():
 
     # sample
     p_sm = sub.add_parser("sample", help="Random sample of items")
+    p_sm.add_argument("--space", help="Space alias or UUID")
     p_sm.add_argument("--topic", help="Filter by topic")
     p_sm.add_argument("--collection", help="Filter by collection ID")
     p_sm.add_argument("--limit", type=int, default=5)
 
     # get
     p_gt = sub.add_parser("get", help="Get single item by ID")
+    p_gt.add_argument("--space", help="Space alias or UUID")
     p_gt.add_argument("id", type=int)
     p_gt.add_argument("--content", action="store_true", help="Include full content")
 
@@ -287,6 +425,7 @@ def main():
 
     cmds = {
         "config": cmd_config,
+        "spaces": cmd_spaces,
         "collections": cmd_collections,
         "topics": cmd_topics,
         "stats": cmd_stats,
