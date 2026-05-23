@@ -16,22 +16,24 @@ cohub-silo is a data server running inside a Cohub Space. It indexes documents, 
 ## Setup
 
 ```bash
-# 1. Install
+# 1. Install as a skill (makes it available to Claude Code agents)
 npx skills add github.com/kjx-talesofai/cohub-silo-client -g -y
 
-# 2. Configure the target silo's space UUID (ask the silo owner)
-silo-client config --space <space-uuid> --alias <name>
-# e.g. silo-client config --space <uuid> --alias kjx
+# 2. Run the CLI directly
+python3 ~/.claude/skills/silo-client/cli.py config --space <space-uuid> --alias <name>
+# e.g. python3 ~/.claude/skills/silo-client/cli.py config --space <uuid> --alias kjx
 
 # Add more silos with different aliases
-silo-client config --space <another-uuid> --alias colleague
+python3 ~/.claude/skills/silo-client/cli.py config --space <another-uuid> --alias colleague
 
 # Set default
-silo-client config --default kjx
+python3 ~/.claude/skills/silo-client/cli.py config --default kjx
 
 # Or use env var (accepts alias or raw UUID)
 export SILO_SPACE=kjx
 ```
+
+> **Note:** `npx skills add` registers the skill for Claude Code agents. It does **not** install a global `silo-client` shell command. Use `python3 ~/.claude/skills/silo-client/cli.py` to run the CLI directly, or create a symlink manually (see Troubleshooting).
 
 **Supports multiple spaces.** Add as many silos as you want with different aliases, and switch between them with `--space <alias>`.
 
@@ -41,31 +43,31 @@ The silo URL is always: `https://s-{space-uuid}-5173.cohub.run`
 
 ```bash
 # Config (multi-space)
-silo-client config                         # Show all configured spaces
-silo-client spaces                         # Same as config
-silo-client config --space <uuid> --alias <name>   # Add a space
-silo-client config --default <alias>               # Set default
-silo-client config --remove <alias>                # Remove a space
+python3 ~/.claude/skills/silo-client/cli.py config                         # Show all configured spaces
+python3 ~/.claude/skills/silo-client/cli.py spaces                         # Same as config
+python3 ~/.claude/skills/silo-client/cli.py config --space <uuid> --alias <name>   # Add a space
+python3 ~/.claude/skills/silo-client/cli.py config --default <alias>               # Set default
+python3 ~/.claude/skills/silo-client/cli.py config --remove <alias>                # Remove a space
 
 # Discovery (--space <alias|uuid> overrides default)
-silo-client collections                    # Use default space
-silo-client collections --space kjx        # Explicit space by alias
-silo-client topics                         # List all topics with item counts
-silo-client stats                          # Daily indexing stats
+python3 ~/.claude/skills/silo-client/cli.py collections                    # Use default space
+python3 ~/.claude/skills/silo-client/cli.py collections --space kjx        # Explicit space by alias
+python3 ~/.claude/skills/silo-client/cli.py topics                         # List all topics with item counts
+python3 ~/.claude/skills/silo-client/cli.py stats                          # Daily indexing stats
 
 # Search & retrieval
-silo-client search --q "keyword"           # Full-text search (supports CJK)
-silo-client search --q "keyword" --topic tech --collection my-docs --limit 10
-silo-client search --q "keyword" --sort random  # Sort: latest | random | relevant
+python3 ~/.claude/skills/silo-client/cli.py search --q "keyword"           # Full-text search (supports CJK)
+python3 ~/.claude/skills/silo-client/cli.py search --q "keyword" --topic tech --collection my-docs --limit 10
+python3 ~/.claude/skills/silo-client/cli.py search --q "keyword" --sort random  # Sort: latest | random | relevant
 
 # Random sampling
-silo-client sample                         # 5 random items
-silo-client sample --topic warhammer40k --limit 3
-silo-client sample --collection my-docs --limit 10
+python3 ~/.claude/skills/silo-client/cli.py sample                         # 5 random items
+python3 ~/.claude/skills/silo-client/cli.py sample --topic warhammer40k --limit 3
+python3 ~/.claude/skills/silo-client/cli.py sample --collection my-docs --limit 10
 
 # Single item
-silo-client get 42                         # Item metadata
-silo-client get 42 --content               # Include full content (for reading)
+python3 ~/.claude/skills/silo-client/cli.py get 42                         # Item metadata
+python3 ~/.claude/skills/silo-client/cli.py get 42 --content               # Include full content (for reading)
 ```
 
 ## Agent usage guidelines
@@ -74,15 +76,15 @@ When a user asks you to use silo-client:
 
 1. **First, ensure config is set:**
    ```bash
-   silo-client config
+   python3 ~/.claude/skills/silo-client/cli.py config
    ```
    If no spaces are configured, ask the user for the space UUID.
    Users may have multiple silos configured — respect the alias they want to use.
 
 2. **Discover what's available:**
    ```bash
-   silo-client collections
-   silo-client topics
+   python3 ~/.claude/skills/silo-client/cli.py collections
+   python3 ~/.claude/skills/silo-client/cli.py topics
    ```
    This helps you understand the knowledge domains before searching.
 
@@ -92,11 +94,11 @@ When a user asks you to use silo-client:
    - Use `--sort random` for discovery/serendipity browsing.
 
 4. **Retrieve content when needed:**
-   - `silo-client get <id> --content` returns the full text content.
+   - `python3 ~/.claude/skills/silo-client/cli.py get <id> --content` returns the full text content.
    - For large content, pipe through `head` or `less` if needed.
 
 5. **Sample for exploration:**
-   - `silo-client sample --topic <t>` gives a quick taste of a topic without search.
+   - `python3 ~/.claude/skills/silo-client/cli.py sample --topic <t>` gives a quick taste of a topic without search.
 
 ## Rate limits
 
@@ -115,7 +117,18 @@ The silo enforces **60 requests per minute** per IP. Be mindful of rate limits �
 
 ## Troubleshooting
 
+- **`command not found: silo-client`**: The `npx skills add` command registers the skill for Claude Code but does not create a global shell command. Run the CLI directly with:
+  ```bash
+  python3 ~/.claude/skills/silo-client/cli.py <command>
+  ```
+  Or create a symlink for convenience:
+  ```bash
+  chmod +x ~/.claude/skills/silo-client/cli.py
+  mkdir -p ~/.local/bin
+  ln -s ~/.claude/skills/silo-client/cli.py ~/.local/bin/silo-client
+  export PATH="$HOME/.local/bin:$PATH"
+  ```
 - **`✗ connection error`**: Verify space UUID is correct and the silo server is running.
 - **`✗ HTTP 404`**: The endpoint doesn't exist — check the space UUID.
 - **`✗ HTTP 429`**: Rate limited. Wait 60 seconds before retrying.
-- **`✗ no silo space configured`**: Run `silo-client config --space <uuid>` first.
+- **`✗ no silo space configured`**: Run `python3 ~/.claude/skills/silo-client/cli.py config --space <uuid>` first.

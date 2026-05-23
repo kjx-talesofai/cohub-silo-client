@@ -28,26 +28,28 @@ npx skills add github.com/kjx-talesofai/cohub-silo-client -g -y
 git clone https://github.com/kjx-talesofai/cohub-silo-client.git
 cd cohub-silo-client
 
-# Configure target silo (add multiple with different aliases)
-silo-client config --space <your-space-uuid> --alias kjx
-silo-client config --space <another-uuid> --alias colleague
+# Run the CLI directly (npx skills add does not create a global command)
+python3 cli.py config --space <your-space-uuid> --alias kjx
+python3 cli.py config --space <another-uuid> --alias colleague
 
 # Explore
-silo-client collections                   # uses default
-silo-client collections --space colleague # explicit space
-silo-client topics
-silo-client stats
+python3 cli.py collections                   # uses default
+python3 cli.py collections --space colleague # explicit space
+python3 cli.py topics
+python3 cli.py stats
 
 # Search
-silo-client search --q "审判庭"
-silo-client search --q "Tyrant Star" --topic warhammer40k
+python3 cli.py search --q "审判庭"
+python3 cli.py search --q "Tyrant Star" --topic warhammer40k
 
 # Sample
-silo-client sample --topic ai-art --limit 3
+python3 cli.py sample --topic ai-art --limit 3
 
 # Read
-silo-client get 78 --content
+python3 cli.py get 78 --content
 ```
+
+> **Note:** `npx skills add` registers the skill for Claude Code agents but does not install a global `silo-client` shell command. Use `python3 cli.py` (or `python3 ~/.claude/skills/silo-client/cli.py`) directly. To add it to your PATH, see [Troubleshooting](#troubleshooting).
 
 ## How it works
 
@@ -104,24 +106,43 @@ Space resolution order:
 
 ```bash
 # Add spaces
-silo-client config --space <uuid> --alias kjx
-silo-client config --space <uuid> --alias alice
+python3 cli.py config --space <uuid> --alias kjx
+python3 cli.py config --space <uuid> --alias alice
 
 # Set default
-silo-client config --default alice
+python3 cli.py config --default alice
 
 # Remove
-silo-client config --remove alice
+python3 cli.py config --remove alice
 
 # One-shot override
-silo-client --space kjx search --q "keyword"
+python3 cli.py --space kjx search --q "keyword"
 
 # Env var
 export SILO_SPACE=kjx
-silo-client collections
+python3 cli.py collections
 
 # Raw UUID always works too
-silo-client --space xxxxxxxx-... collections
+python3 cli.py --space xxxxxxxx-... collections
+```
+
+## Troubleshooting
+
+**`command not found: silo-client`**
+
+The `npx skills add` command registers the skill for Claude Code but does not create a global shell command. Use the direct path:
+
+```bash
+python3 ~/.claude/skills/silo-client/cli.py <command>
+```
+
+Or create a symlink for convenience:
+
+```bash
+chmod +x ~/.claude/skills/silo-client/cli.py
+mkdir -p ~/.local/bin
+ln -s ~/.claude/skills/silo-client/cli.py ~/.local/bin/silo-client
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ## For silo owners
